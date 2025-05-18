@@ -31,6 +31,33 @@ import litellm
 from gait import Idris, IdrisRDB, IdrisEmb, IdrisLLM
 from gait.idris import IdrisLiteLLM, IdrisLiteEmb
 
+# Spatial relation helpers copied from the FEL implementation
+def _get_relation(relation: str) -> Tuple[str, str]:
+    match relation:
+        case "notIntersects":
+            return "INVERT", "INTERSECT"
+        case "withinDistance":
+            return "NOT_INVERT", "WITHIN_A_DISTANCE"
+        case "notWithinDistance":
+            return "INVERT", "WITHIN_A_DISTANCE"
+        case "contains":
+            return "NOT_INVERT", "CONTAINS"
+        case "notContains":
+            return "INVERT", "CONTAINS"
+        case "within":
+            return "NOT_INVERT", "WITHIN"
+        case "notWithin":
+            return "INVERT", "WITHIN"
+        case "near":
+            return "NOT_INVERT", "WITHIN_A_DISTANCE_GEODESIC"
+        case _:
+            return "NOT_INVERT", "INTERSECT"
+
+
+def _get_linear_unit(distance: float, units: str) -> str:
+    """Return ArcPy linear unit string"""
+    return f"{distance} {units.capitalize()}" if distance else ""
+
 # Adds the custom module to the path if needed
 custom_path = os.path.join(os.path.dirname(__file__), "..", "gait", "idris")
 if custom_path not in sys.path:
@@ -371,13 +398,17 @@ def find_layer_idris_folder(output_root: str, layer_name: str) -> Optional[str]:
 
 
 def run_query(
-    query_text: str, 
-    layer_name: str, 
-    idris_root: str, 
+    query_text: str,
+    layer_name: str,
+    idris_root: str,
     model_name: Optional[str] = None,
     api_key: Optional[str] = None,
     api_base: Optional[str] = None,
-    api_version: Optional[str] = "2024-10-21"
+    api_version: Optional[str] = "2024-10-21",
+    layer2_name: Optional[str] = None,
+    relation: str = "intersects",
+    distance: float = 0.0,
+    unit: str = "meters",
 ) -> bool:
     """
     Main function to run a natural language query on a geospatial layer using Idris.
@@ -390,12 +421,18 @@ def run_query(
         api_key: API key for Azure/OpenAI
         api_base: API base URL for Azure/OpenAI
         api_version: API version for Azure/OpenAI
+        layer2_name: Optional name of a second layer for spatial filtering
+        relation: Spatial relationship to apply (e.g. "intersects", "withinDistance")
+        distance: Buffer distance used with relation when applicable
+        unit: Linear unit for the distance parameter
         
     Returns:
         bool: True if query executed successfully, False otherwise
     """
     arcpy.AddMessage(f"Processing query: {query_text}")
     arcpy.AddMessage(f"Target layer: {layer_name}")
+    if layer2_name:
+        arcpy.AddMessage(f"Spatial filter layer: {layer2_name}")
     
     # Get current project
     curr_proj = arcpy.mp.ArcGISProject("CURRENT")
@@ -410,6 +447,16 @@ def run_query(
     if not target_layer:
         arcpy.AddError(f"Layer '{layer_name}' not found in the active map")
         return False
+
+    target_layer2 = None
+    if layer2_name:
+        for layer in curr_proj.activeMap.listLayers():
+            if layer.name.lower() == layer2_name.lower():
+                target_layer2 = layer
+                break
+        if not target_layer2:
+            arcpy.AddError(f"Layer '{layer2_name}' not found in the active map")
+            return False
     
     # Find the Idris data folder for this layer
     idris_folder = find_layer_idris_folder(idris_root, layer_name)
@@ -498,6 +545,21 @@ def run_query(
             
             # Execute the SQL (this will select features in the layer)
             rdb.execute_sql(sql)
+
+            # Optionally refine the selection using a second layer
+            if layer2_name:
+                arcpy.management.MakeFeatureLayer(target_layer, "LHS")
+                arcpy.management.MakeFeatureLayer(target_layer2, "RHS")
+                invert, overlap_type = _get_relation(relation)
+                search_distance = _get_linear_unit(distance, unit)
+                arcpy.management.SelectLayerByLocation(
+                    "LHS",
+                    overlap_type,
+                    "RHS",
+                    search_distance,
+                    "SUBSET_SELECTION",
+                    invert,
+                )
             return True
         else:
             arcpy.AddWarning("No SQL could be generated from the query")
@@ -517,12 +579,22 @@ if __name__ == "__main__":
     query_text = arcpy.GetParameterAsText(0)  # The Natural language query
     layer_name = arcpy.GetParameterAsText(1)  # The Layer to query
     idris_root = arcpy.GetParameterAsText(2)  # Root folder containing Idris data
-    
+
     # LLM API parameters
     model_name = arcpy.GetParameterAsText(3)  # Model name
     api_key = arcpy.GetParameterAsText(4)  # API key
     api_base = arcpy.GetParameterAsText(5)  # API base URL
     api_version = arcpy.GetParameterAsText(6)  # API version
+
+    # Optional spatial parameters
+    layer2_name = arcpy.GetParameterAsText(7)
+    relation = arcpy.GetParameterAsText(8)
+    distance_param = arcpy.GetParameterAsText(9)
+    unit = arcpy.GetParameterAsText(10)
+    try:
+        distance = float(distance_param) if distance_param else 0.0
+    except ValueError:
+        distance = 0.0
     
     # Run the query
     run_query(
@@ -532,5 +604,9 @@ if __name__ == "__main__":
         model_name,
         api_key,
         api_base,
-        api_version
-    ) 
+        api_version,
+        layer2_name,
+        relation,
+        distance,
+        unit,
+    )

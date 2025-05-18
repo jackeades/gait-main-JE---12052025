@@ -312,10 +312,69 @@ class QueryWithIdris(object):
             direction="Input"
         )
         param_layer.filter.type = "ValueList"
-        param_layer.filter.list = [layer.name for layer in 
-                                  arcpy.mp.ArcGISProject("CURRENT").activeMap.listLayers() 
+        param_layer.filter.list = [layer.name for layer in
+                                  arcpy.mp.ArcGISProject("CURRENT").activeMap.listLayers()
                                   if not layer.isGroupLayer and layer.isFeatureLayer]
         params.append(param_layer)
+
+        # Optional second layer for spatial filtering
+        param_layer2 = arcpy.Parameter(
+            displayName="Spatial Filter Layer",
+            name="layer2_name",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input"
+        )
+        param_layer2.filter.type = "ValueList"
+        param_layer2.filter.list = param_layer.filter.list
+        params.append(param_layer2)
+
+        # Spatial relation
+        param_relation = arcpy.Parameter(
+            displayName="Spatial Relation",
+            name="relation",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input"
+        )
+        param_relation.filter.type = "ValueList"
+        param_relation.filter.list = [
+            "intersects",
+            "notIntersects",
+            "withinDistance",
+            "notWithinDistance",
+            "contains",
+            "notContains",
+            "within",
+            "notWithin",
+            "near",
+        ]
+        param_relation.value = "intersects"
+        params.append(param_relation)
+
+        # Distance for relation
+        param_distance = arcpy.Parameter(
+            displayName="Distance",
+            name="distance",
+            datatype="GPDouble",
+            parameterType="Optional",
+            direction="Input"
+        )
+        param_distance.value = 0
+        params.append(param_distance)
+
+        # Unit for distance
+        param_unit = arcpy.Parameter(
+            displayName="Distance Unit",
+            name="unit",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input"
+        )
+        param_unit.filter.type = "ValueList"
+        param_unit.filter.list = ["meters", "feet", "kilometers", "miles"]
+        param_unit.value = "meters"
+        params.append(param_unit)
         
         # Idris Data Root
         param_idris_root = arcpy.Parameter(
@@ -396,6 +455,10 @@ class QueryWithIdris(object):
         api_key = parameters[4].valueAsText
         api_base = parameters[5].valueAsText
         api_version = parameters[6].valueAsText
+        layer2_name = parameters[7].valueAsText if len(parameters) > 7 else None
+        relation = parameters[8].valueAsText if len(parameters) > 8 else "intersects"
+        distance = float(parameters[9].value) if len(parameters) > 9 and parameters[9].valueAsText else 0.0
+        unit = parameters[10].valueAsText if len(parameters) > 10 else "meters"
         
         # Ensure API base has https:// prefix if provided
         if api_base and not api_base.startswith(('http://', 'https://')):
@@ -429,7 +492,11 @@ class QueryWithIdris(object):
                 model_name=model_name,
                 api_key=api_key,
                 api_base=api_base,
-                api_version=api_version
+                api_version=api_version,
+                layer2_name=layer2_name,
+                relation=relation,
+                distance=distance,
+                unit=unit,
             )
             
             if not success:
