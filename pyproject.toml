@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gait"
+description = "Generative AI Toolkit"
+version = "0.8.25"
+requires-python = ">=3.10,<3.13"
+readme = "README.md"
+
+authors = [
+    { name = "mraad", email = "mraad@esri.com" }
+]
+
+dependencies = [
+    "litellm==1.66.3",
+    "sqlparse>=0.5.3",
+    "wordninja>=2.0.0",
+    "sentence-transformers>=4.1.0",
+    "accelerate>=1.6.0",
+    "huggingface-hub",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/mraad/gait"
+"Bug Tracker" = "https://github.com/mraad/gait/issues"
+
+[tool.setuptools.packages.find]
+
+[project.optional-dependencies]
+chromadb = [
+    "chromadb>=1.0.4",
+]
+jupyter = [
+    "black",
+    "faker",
+    # "fastembed",
+    "ipywidgets",
+    "isort",
+    "jupyter",
+    "jupyterlab-code-formatter",
+    "jupyterlab>=4.4.1",
+    "jupyterlab_nvdashboard",
+    "loguru",
+    # "qdrant-client[fastembed]",
+    "rich",
+    "scikit-learn",
+    "seaborn",
+    "shapely",
+]
+arcgis = [
+    # Make sure to stay in sync with the version in ArcGIS Pro.
+    "pandas==2.0.2",
+    "numpy==1.24.3",
+    "pytz==2022.6",
+    "sympy==1.12",
+    "duckdb==1.2.0",
+    "pydantic>=2.11.3",
+]
+fastapi = [
+    "fastapi>=0.115.9",
+    "fastapi-cli>=0.0.5",
+    "duckdb==1.2.0",
+    "geopandas>=1.0.1",
+    "python-multipart",
+    "environs",
+]
+langchain = [
+    "langchain>=0.1.0",
+    "langchain-openai>=0.1.0",
+    "langchain-community>=0.0.13",
+    "langchainhub>=0.0.0",
+]
